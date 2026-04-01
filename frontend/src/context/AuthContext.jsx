@@ -1,4 +1,5 @@
-import { createContext, useState, useContext } from 'react';
+import { createContext, useState, useContext, useEffect } from 'react';
+import { authAPI } from '../api/api';
 
 const AuthContext = createContext();
 
@@ -11,93 +12,117 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(true); // Default to true for demo
-  const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState({
-    id: 1,
-    name: 'John Doe',
-    email: 'john@example.com',
-    phone: '0712345678',
-    slots: 5,
-    joinedDate: '2024-01-15',
-    totalUploads: 12,
-    subscriptionType: 'pay-as-you-go'
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+
+  // Check if user is logged in on mount
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
+    
+    if (token && userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+        setIsAuthenticated(true);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+    }
+    setLoading(false);
+  }, []);
 
   const login = async (email, password) => {
-    setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setLoading(true);
+      const response = await authAPI.login({ email, password });
       
-      // Mock successful login
-      setUser({
-        id: 1,
-        name: 'John Doe',
-        email: email,
-        phone: '0712345678',
-        slots: 5,
-        joinedDate: '2024-01-15',
-        totalUploads: 12,
-        subscriptionType: 'pay-as-you-go'
-      });
-      setIsAuthenticated(true);
-      return { success: true };
+      if (response.success) {
+        const { user: userData, token } = response.data;
+        
+        // Store in localStorage
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        
+        // Update state
+        setUser(userData);
+        setIsAuthenticated(true);
+        
+        return { success: true };
+      } else {
+        return { success: false, message: response.message };
+      }
     } catch (error) {
-      return { success: false, error: 'Invalid credentials' };
+      return { 
+        success: false, 
+        message: error.message || 'Login failed' 
+      };
     } finally {
       setLoading(false);
     }
   };
 
-  const register = async (userData) => {
-    setLoading(true);
+  const register = async (name, email, password) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setLoading(true);
+      const response = await authAPI.register({ name, email, password });
       
-      // Mock successful registration
-      setUser({
-        id: Date.now(),
-        name: userData.name,
-        email: userData.email,
-        phone: userData.phone,
-        slots: 1, // Free slot for new users
-        joinedDate: new Date().toISOString().split('T')[0],
-        totalUploads: 0,
-        subscriptionType: 'free'
-      });
-      setIsAuthenticated(true);
-      return { success: true };
+      if (response.success) {
+        const { user: userData, token } = response.data;
+        
+        // Store in localStorage
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        
+        // Update state
+        setUser(userData);
+        setIsAuthenticated(true);
+        
+        return { success: true };
+      } else {
+        return { success: false, message: response.message };
+      }
     } catch (error) {
-      return { success: false, error: 'Registration failed' };
+      return { 
+        success: false, 
+        message: error.message || 'Registration failed' 
+      };
     } finally {
       setLoading(false);
     }
   };
 
   const logout = () => {
-    setIsAuthenticated(false);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setUser(null);
-  };
-
-  const updateUser = (newUserData) => {
-    setUser(prev => ({ ...prev, ...newUserData }));
+    setIsAuthenticated(false);
   };
 
   const updateSlots = (newSlots) => {
-    setUser(prev => ({ ...prev, slots: newSlots }));
+    const updatedUser = { ...user, slots: newSlots };
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
+
+  const updateUser = (userData) => {
+    const updatedUser = { ...user, ...userData };
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
   };
 
   const value = {
-    user,
     isAuthenticated,
     loading,
+    user,
     login,
     register,
     logout,
-    updateUser,
-    updateSlots
+    updateSlots,
+    updateUser
   };
 
   return (
